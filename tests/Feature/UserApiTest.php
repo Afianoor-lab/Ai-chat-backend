@@ -73,6 +73,48 @@ class UserApiTest extends TestCase
         $this->assertSame('sk-or-secret-value', $user->fresh()->openrouter_api_key);
     }
 
+    public function test_api_key_can_be_removed_without_exposing_it(): void
+    {
+        $user = User::factory()->create(['openrouter_api_key' => 'sk-or-secret-value']);
+        Sanctum::actingAs($user);
+
+        $this->deleteJson('/api/settings/api-key')
+            ->assertOk()
+            ->assertJsonPath('data.api_key_configured', false)
+            ->assertJsonMissingPath('data.openrouter_api_key');
+
+        $this->assertNull($user->fresh()->openrouter_api_key);
+    }
+
+    public function test_passcode_is_hashed_and_required_to_change_after_initial_setup(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        $this->putJson('/api/settings/passcode', [
+            'passcode' => 'secret-code',
+            'passcode_confirmation' => 'secret-code',
+        ])->assertOk();
+
+        $storedPasscode = DB::table('users')->where('id', $user->id)->value('passcode');
+        $this->assertNotSame('secret-code', $storedPasscode);
+        $this->assertTrue(Hash::check('secret-code', $user->fresh()->passcode));
+
+        $this->putJson('/api/settings/passcode', [
+            'passcode' => 'new-secret-code',
+            'passcode_confirmation' => 'new-secret-code',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('current_passcode');
+
+        $this->putJson('/api/settings/passcode', [
+            'current_passcode' => 'secret-code',
+            'passcode' => 'new-secret-code',
+            'passcode_confirmation' => 'new-secret-code',
+        ])->assertOk();
+
+        $this->assertTrue(Hash::check('new-secret-code', $user->fresh()->passcode));
+    }
+
     public function test_profile_password_update_hashes_the_new_password(): void
     {
         $user = User::factory()->create();
@@ -90,7 +132,16 @@ class UserApiTest extends TestCase
     {
         Http::fake([
             'https://openrouter.ai/api/v1/models' => Http::response([
-                'data' => [['id' => 'openai/gpt-4o-mini']],
+                'data' => [[
+                    'id' => 'openai/gpt-4o-mini',
+                    'architecture' => [
+                        'modality' => 'text+image',
+                        'input_modalities' => ['text', 'image'],
+                        'output_modalities' => ['text'],
+                    ],
+                    'supported_parameters' => ['reasoning'],
+                    'pricing' => ['prompt' => '0.00000015', 'completion' => '0.0000006'],
+                ]],
             ]),
         ]);
 
@@ -99,7 +150,12 @@ class UserApiTest extends TestCase
 
         $this->getJson('/api/models')
             ->assertOk()
-            ->assertJsonPath('data.0.id', 'openai/gpt-4o-mini');
+            ->assertJsonPath('data.0.id', 'openai/gpt-4o-mini')
+            ->assertJsonPath('data.0.vision', true)
+            ->assertJsonPath('data.0.reasoning', true)
+            ->assertJsonPath('data.0.price.prompt', '0.00000015')
+            ->assertJsonPath('data.0.input_modalities.1', 'image')
+            ->assertJsonPath('data.0.output_modalities.0', 'text');
 
         Http::assertSent(fn (ClientRequest $request): bool => $request->hasHeader(
             'Authorization',

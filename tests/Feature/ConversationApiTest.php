@@ -126,4 +126,138 @@ class ConversationApiTest extends TestCase
         $this->assertDatabaseMissing('conversations', ['id' => $conversation->id]);
         $this->assertDatabaseMissing('messages', ['id' => $message->id]);
     }
+
+    public function test_chat_list_searches_titles_and_messages_and_filters_archived_chats(): void
+    {
+        $user = User::factory()->create();
+        $matching = $user->conversations()->create(['title' => 'A normal chat', 'model' => 'model-a']);
+        $matching->messages()->create(['role' => 'user', 'content' => 'needle in message']);
+        $user->conversations()->create([
+            'title' => 'needle in title',
+            'model' => 'model-a',
+            'locked' => true,
+        ]);
+        $user->conversations()->create([
+            'title' => 'Archived needle',
+            'model' => 'model-a',
+            'archived' => true,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->getJson('/api/chats?q=needle&archived=0')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.title', 'A normal chat')
+            ->assertJsonMissingPath('data.0.messages');
+
+        $this->getJson('/api/chats?archived=1')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.title', 'Archived needle');
+    }
+
+    public function test_chat_can_be_updated_and_cannot_be_assigned_to_another_users_project(): void
+    {
+        $user = User::factory()->create();
+        $otherUser = User::factory()->create();
+        $project = $user->projects()->create(['name' => 'My project']);
+        $otherProject = $otherUser->projects()->create(['name' => 'Other project']);
+        $conversation = $user->conversations()->create([
+            'title' => 'Before update',
+            'model' => 'model-a',
+        ]);
+        Sanctum::actingAs($user);
+
+        $this->patchJson("/api/chats/{$conversation->id}", [
+            'title' => 'Updated chat',
+            'pinned' => true,
+            'archived' => true,
+            'model' => 'model-b',
+            'persona' => 'concise',
+            'project_id' => $project->id,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.title', 'Updated chat')
+            ->assertJsonPath('data.pinned', true)
+            ->assertJsonPath('data.archived', true)
+            ->assertJsonPath('data.project_id', $project->id);
+
+        $this->patchJson("/api/chats/{$conversation->id}", [
+            'project_id' => $otherProject->id,
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('project_id');
+    }
+
+    public function test_delete_all_chats_only_removes_the_authenticated_users_chats(): void
+    {
+        $user = User::factory()->create();
+        $otherUser = User::factory()->create();
+        $conversation = $user->conversations()->create(['title' => 'Mine', 'model' => 'model-a']);
+        $message = $conversation->messages()->create(['role' => 'user', 'content' => 'Delete me']);
+        $otherConversation = $otherUser->conversations()->create(['title' => 'Theirs', 'model' => 'model-a']);
+        Sanctum::actingAs($user);
+
+        $this->deleteJson('/api/chats')->assertNoContent();
+
+        $this->assertDatabaseMissing('conversations', ['id' => $conversation->id]);
+        $this->assertDatabaseMissing('messages', ['id' => $message->id]);
+        $this->assertDatabaseHas('conversations', ['id' => $otherConversation->id]);
+    }
+
+    public function test_duplicate_copies_messages_but_not_pinned_or_locked_state(): void
+    {
+        $user = User::factory()->create();
+        $project = $user->projects()->create(['name' => 'Project']);
+        $conversation = $user->conversations()->create([
+            'title' => 'Original',
+            'model' => 'model-a',
+            'project_id' => $project->id,
+            'persona' => 'friendly',
+            'pinned' => true,
+        ]);
+        $conversation->messages()->create([
+            'role' => 'user',
+            'content' => 'Hello',
+            'model' => 'model-a',
+        ]);
+        Sanctum::actingAs($user);
+
+        $this->postJson("/api/chats/{$conversation->id}/duplicate")
+            ->assertCreated()
+            ->assertJsonPath('data.title', 'Original (copy)')
+            ->assertJsonPath('data.pinned', false)
+            ->assertJsonPath('data.locked', false)
+            ->assertJsonPath('data.project_id', $project->id)
+            ->assertJsonPath('data.messages.0.content', 'Hello');
+    }
+
+    public function test_chat_lock_requires_a_passcode_and_unlock_verifies_it(): void
+    {
+        $user = User::factory()->create();
+        $conversation = $user->conversations()->create(['title' => 'Protected', 'model' => 'model-a']);
+        Sanctum::actingAs($user);
+
+        $this->postJson("/api/chats/{$conversation->id}/lock")->assertStatus(409);
+
+        $this->putJson('/api/settings/passcode', [
+            'passcode' => 'private-code',
+            'passcode_confirmation' => 'private-code',
+        ])->assertOk();
+
+        $this->postJson("/api/chats/{$conversation->id}/lock")
+            ->assertOk()
+            ->assertJsonPath('data.locked', true);
+        $this->getJson("/api/chats/{$conversation->id}")->assertStatus(423);
+        $this->getJson('/api/chats')->assertJsonMissing(['title' => 'Protected']);
+
+        $this->postJson("/api/chats/{$conversation->id}/unlock", ['code' => 'wrong-code'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('code');
+
+        $this->postJson("/api/chats/{$conversation->id}/unlock", ['code' => 'private-code'])
+            ->assertOk()
+            ->assertJsonPath('data.locked', false);
+        $this->getJson("/api/chats/{$conversation->id}")->assertOk();
+    }
 }

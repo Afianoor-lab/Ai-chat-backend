@@ -57,6 +57,38 @@ class OpenRouterModelController extends Controller
             ], 502);
         }
 
+        foreach ($models as $index => $model) {
+            if (! is_array($model)) {
+                Log::warning('OpenRouter returned an invalid model entry.', ['index' => $index]);
+
+                return response()->json([
+                    'message' => 'OpenRouter returned an invalid model list.',
+                ], 502);
+            }
+
+            $inputModalities = data_get($model, 'architecture.input_modalities', []);
+            $outputModalities = data_get($model, 'architecture.output_modalities', []);
+            $supportedParameters = data_get($model, 'supported_parameters', []);
+            $modality = strtolower((string) data_get($model, 'architecture.modality', ''));
+
+            $model['vision'] = (bool) ($model['vision'] ?? (
+                (is_array($inputModalities) && in_array('image', $inputModalities, true))
+                || str_contains($modality, 'image')
+            ));
+            $model['reasoning'] = (bool) ($model['reasoning'] ?? (
+                is_array($supportedParameters)
+                && (
+                    in_array('reasoning', $supportedParameters, true)
+                    || in_array('include_reasoning', $supportedParameters, true)
+                )
+            ));
+            $model['price'] = $model['price'] ?? data_get($model, 'pricing');
+            $model['input_modalities'] = is_array($inputModalities) ? $inputModalities : [];
+            $model['output_modalities'] = is_array($outputModalities) ? $outputModalities : [];
+
+            $models[$index] = $model;
+        }
+
         return response()->json(['data' => $models]);
     }
 }

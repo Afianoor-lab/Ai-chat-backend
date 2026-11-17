@@ -24,7 +24,22 @@ The API routes below require a Laravel Sanctum bearer token in the `Authorizatio
 | `GET` | `/api/user` | Read the authenticated user's profile and API-key status |
 | `PUT` | `/api/user/profile` | Update `name`, `email`, and/or `password` (`password_confirmation` required with password) |
 | `PUT` | `/api/user/settings` | Save `openrouter_api_key` and/or `default_model` |
+| `DELETE` | `/api/settings/api-key` | Remove the authenticated user's OpenRouter API key |
+| `PUT` | `/api/settings/passcode` | Set/change a chat lock passcode (`passcode_confirmation` required) |
 | `GET` | `/api/models` | Fetch the user's available models from OpenRouter |
+| `GET` | `/api/projects` | List the authenticated user's projects |
+| `POST` | `/api/projects` | Create a project (`name`, optional `description`) |
+| `PATCH` | `/api/projects/{project}` | Update a project |
+| `DELETE` | `/api/projects/{project}` | Delete a project; its chats remain and become unassigned |
+| `GET` | `/api/chats` | Search and filter the user's chats (`q`, `archived`, `page`, `per_page`) |
+| `POST` | `/api/chats` | Create a chat |
+| `GET` | `/api/chats/{conversation}` | Read a chat and its messages; locked chats require unlocking first |
+| `PATCH` | `/api/chats/{conversation}` | Update title, pin/archive state, model, persona, or project |
+| `DELETE` | `/api/chats/{conversation}` | Delete one chat and its messages |
+| `DELETE` | `/api/chats` | Delete all of the authenticated user's chats |
+| `POST` | `/api/chats/{conversation}/duplicate` | Copy a chat and its messages |
+| `POST` | `/api/chats/{conversation}/lock` | Lock a chat after a passcode is configured |
+| `POST` | `/api/chats/{conversation}/unlock` | Unlock a chat using `{ "code": "..." }` |
 | `GET` | `/api/conversations` | Paginated history for the authenticated user (`per_page` 1–100, default 15) |
 | `POST` | `/api/conversations` | Create a conversation |
 | `GET` | `/api/conversations/{conversation}` | Read one of the user's conversations and its messages |
@@ -32,7 +47,9 @@ The API routes below require a Laravel Sanctum bearer token in the `Authorizatio
 
 `GET /api/user` never returns the API key itself. The key is encrypted by the `User` model and the response exposes only `api_key_configured`.
 
-Three migrations add nullable `openrouter_api_key` (text) and `default_model` (string) columns to `users`, create `conversations` with `user_id`, `title`, and `model`, and create `messages` with `conversation_id`, `role`, `content`, and an optional `model`. The `User`, `Conversation`, and `Message` models expose their related records. Conversation creation accepts optional `title` and `model`; it uses `New Chat` for an omitted title and the user's saved default model when `model` is omitted.
+OpenRouter model responses preserve provider fields and add normalized `vision`, `reasoning`, `price`, `input_modalities`, and `output_modalities` fields. The passcode is stored as a hash; changing an existing passcode requires `current_passcode`. Projects have `name` and optional `description`; deleting a project preserves its chats and unassigns them.
+
+Migrations add nullable OpenRouter settings and passcode fields to `users`, create `conversations`, `messages`, and `projects`, and add project, persona, pinned, archived, and locked fields to conversations. The `User`, `Project`, `Conversation`, and `Message` models expose their related records. Conversation creation accepts optional `title` and `model`; it uses `New Chat` for an omitted title and the user's saved default model when `model` is omitted.
 
 ## About Laravel
 
