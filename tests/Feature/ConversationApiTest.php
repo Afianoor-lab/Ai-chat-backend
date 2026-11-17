@@ -51,4 +51,79 @@ class ConversationApiTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonValidationErrors('model');
     }
+
+    public function test_history_lists_only_the_authenticated_users_conversations_with_pagination(): void
+    {
+        $user = User::factory()->create();
+        $otherUser = User::factory()->create();
+
+        $user->conversations()->create(['title' => 'First chat', 'model' => 'model-a']);
+        $user->conversations()->create(['title' => 'Second chat', 'model' => 'model-a']);
+        $otherUser->conversations()->create(['title' => 'Private chat', 'model' => 'model-b']);
+
+        Sanctum::actingAs($user);
+
+        $this->getJson('/api/conversations?per_page=1')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 2)
+            ->assertJsonPath('meta.per_page', 1)
+            ->assertJsonCount(1, 'data')
+            ->assertJsonMissing(['title' => 'Private chat']);
+    }
+
+    public function test_history_details_include_messages_in_creation_order(): void
+    {
+        $user = User::factory()->create();
+        $conversation = $user->conversations()->create([
+            'title' => 'Chat history',
+            'model' => 'model-a',
+        ]);
+        $conversation->messages()->create(['role' => 'user', 'content' => 'Question']);
+        $conversation->messages()->create(['role' => 'assistant', 'content' => 'Answer']);
+
+        Sanctum::actingAs($user);
+
+        $this->getJson("/api/conversations/{$conversation->id}")
+            ->assertOk()
+            ->assertJsonPath('data.id', $conversation->id)
+            ->assertJsonPath('data.messages.0.content', 'Question')
+            ->assertJsonPath('data.messages.1.content', 'Answer');
+    }
+
+    public function test_users_cannot_view_or_delete_another_users_conversation(): void
+    {
+        $owner = User::factory()->create();
+        $conversation = $owner->conversations()->create([
+            'title' => 'Private chat',
+            'model' => 'model-a',
+        ]);
+
+        Sanctum::actingAs(User::factory()->create());
+
+        $this->getJson("/api/conversations/{$conversation->id}")->assertNotFound();
+        $this->deleteJson("/api/conversations/{$conversation->id}")->assertNotFound();
+
+        $this->assertDatabaseHas('conversations', ['id' => $conversation->id]);
+    }
+
+    public function test_deleting_a_conversation_also_deletes_its_messages(): void
+    {
+        $user = User::factory()->create();
+        $conversation = $user->conversations()->create([
+            'title' => 'Delete me',
+            'model' => 'model-a',
+        ]);
+        $message = $conversation->messages()->create([
+            'role' => 'user',
+            'content' => 'This message should be deleted too',
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->deleteJson("/api/conversations/{$conversation->id}")
+            ->assertNoContent();
+
+        $this->assertDatabaseMissing('conversations', ['id' => $conversation->id]);
+        $this->assertDatabaseMissing('messages', ['id' => $message->id]);
+    }
 }

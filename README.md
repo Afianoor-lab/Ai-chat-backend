@@ -25,7 +25,10 @@ The API routes below require a Laravel Sanctum bearer token in the `Authorizatio
 | `PUT` | `/api/user/profile` | Update `name`, `email`, and/or `password` (`password_confirmation` required with password) |
 | `PUT` | `/api/user/settings` | Save `openrouter_api_key` and/or `default_model` |
 | `GET` | `/api/models` | Fetch the user's available models from OpenRouter |
+| `GET` | `/api/conversations` | Paginated history for the authenticated user (`per_page` 1–100, default 15) |
 | `POST` | `/api/conversations` | Create a conversation |
+| `GET` | `/api/conversations/{conversation}` | Read one of the user's conversations and its messages |
+| `DELETE` | `/api/conversations/{conversation}` | Delete one of the user's conversations and its messages |
 
 `GET /api/user` never returns the API key itself. The key is encrypted by the `User` model and the response exposes only `api_key_configured`.
 

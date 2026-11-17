@@ -10,5 +10,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::put('/user/profile', [UserController::class, 'updateProfile']);
     Route::put('/user/settings', [UserController::class, 'updateSettings']);
     Route::get('/models', OpenRouterModelController::class);
+    Route::get('/conversations', [ConversationController::class, 'index']);
     Route::post('/conversations', [ConversationController::class, 'store']);
+    Route::get('/conversations/{conversation}', [ConversationController::class, 'show']);
+    Route::delete('/conversations/{conversation}', [ConversationController::class, 'destroy']);
 });
