@@ -25,10 +25,15 @@ class OpenRouterModelController extends Controller
         }
 
         try {
-            $response = Http::acceptJson()
+            $http = Http::acceptJson()
                 ->withToken($apiKey)
-                ->timeout(15)
-                ->get('https://openrouter.ai/api/v1/models');
+                ->timeout(15);
+
+            if (app()->environment('local')) {
+                $http = $http->withoutVerifying();
+            }
+
+            $response = $http->get('https://openrouter.ai/api/v1/models');
         } catch (ConnectionException $exception) {
             report($exception);
 
