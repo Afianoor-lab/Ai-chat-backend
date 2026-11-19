@@ -8,9 +8,9 @@ use App\Models\AiModel;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Response;
 
 class OpenRouterModelController extends Controller
 {
@@ -60,15 +60,12 @@ class OpenRouterModelController extends Controller
             ], 502);
         }
 
+        // Sirf free models filter karein (:free)
+        $models = array_values(array_filter($models, function ($model) {
+            return is_array($model) && str_ends_with((string) ($model['id'] ?? ''), ':free');
+        }));
+
         foreach ($models as $index => $model) {
-            if (! is_array($model)) {
-                Log::warning('OpenRouter returned an invalid model entry.', ['index' => $index]);
-
-                return response()->json([
-                    'message' => 'OpenRouter returned an invalid model list.',
-                ], 502);
-            }
-
             $inputModalities = data_get($model, 'architecture.input_modalities', []);
             $outputModalities = data_get($model, 'architecture.output_modalities', []);
             $supportedParameters = data_get($model, 'supported_parameters', []);
@@ -95,31 +92,27 @@ class OpenRouterModelController extends Controller
         return response()->json(['data' => $models]);
     }
 
-
-    public function store (Request $request): JsonResponse{
-
-           $validatedData = $request->validate([
-    'name' => 'required|string|max:255|unique:models,name',
-]);
+    public function store(Request $request): JsonResponse
+    {
+        $validatedData = $request->validate([
+            'name' => 'required|string|max:255|unique:models,name',
+        ]);
 
         $record = AiModel::create([
-                'name' => $validatedData['name'],
-            ]);
+            'name' => $validatedData['name'],
+        ]);
 
-            return Response::success(
-           'Record stored successfully.',[
-           'Model' => new ModelResource($record),  ],
-            201,
-           
+        return Response::success(
+            'Record stored successfully.',
+            [
+                'Model' => new ModelResource($record),
+            ],
+            201
         );
-
     }
 
-     public function index(Request $request): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-       
-
-
         $page = max(1, (int) request('page', 1));
         $perPage = max(1, min(100, (int) request('per_page', 15)));
 
