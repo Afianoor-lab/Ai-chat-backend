@@ -11,7 +11,7 @@ class OpenRouterService
 {
     public function chat( string $model, array $messages): array
     {
-         $apiKey = request()->user()->openrouter_api_key;
+         $apiKey = request()->user()->openrouter_api_key ?? env('OPEN_ROUTER_API_KEY');
         if (blank($apiKey)) {
             throw new AIServiceException('No OpenRouter API key configured for this account.', 422);
         }

@@ -16,7 +16,7 @@ Route::middleware('auth.token')->group(function () {
     Route::put('/user/settings', [UserController::class, 'updateSettings']);
     Route::delete('/settings/api-key', [UserController::class, 'deleteApiKey']);
     Route::put('/settings/passcode', [UserController::class, 'updatePasscode']);
-    Route::get('/models', OpenRouterModelController::class);
+    //Route::get('/models', OpenRouterModelController::class);
     Route::apiResource('projects', ProjectController::class)->only(['index', 'store', 'update', 'destroy']);
     Route::get('/chats', [ConversationController::class, 'index']);
     Route::post('/chats', [ConversationController::class, 'store']);
