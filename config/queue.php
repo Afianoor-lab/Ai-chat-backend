@@ -88,6 +88,14 @@ return [
                 'deferred',
             ],
         ],
+        
+        'mongodbdatabase' => [
+        'driver' => 'mongodb',
+        'connection' => 'mongodb', // references your database.php mongodb connection
+        'table' => 'jobs',
+        'queue' => 'default',
+        'retry_after' => 90,
+    ],
 
     ],
 

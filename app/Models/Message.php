@@ -6,9 +6,12 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['conversation_id', 'role', 'content', 'model'])]
+
 class Message extends Model
-{
+{   
+     protected $fillable = [
+       'conversation_id', 'role', 'content', 'model'
+    ];
     public function conversation(): BelongsTo
     {
         return $this->belongsTo(Conversation::class);
