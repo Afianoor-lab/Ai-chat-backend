@@ -3,9 +3,12 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ModelResource;
+use App\Models\AiModel;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -90,5 +93,48 @@ class OpenRouterModelController extends Controller
         }
 
         return response()->json(['data' => $models]);
+    }
+
+
+    public function store (Request $request): JsonResponse{
+
+           $validatedData = $request->validate([
+    'name' => 'required|string|max:255|unique:models,name',
+]);
+
+        $record = AiModel::create([
+                'name' => $validatedData['name'],
+            ]);
+
+            return Response::success(
+           'Record stored successfully.',[
+           'Model' => new ModelResource($record),  ],
+            201,
+           
+        );
+
+    }
+
+     public function index(Request $request): JsonResponse
+    {
+       
+
+
+        $page = max(1, (int) request('page', 1));
+        $perPage = max(1, min(100, (int) request('per_page', 15)));
+
+        $model = AiModel::query()->latest()
+            ->paginate($perPage, ['*'], 'page', $page);
+
+        return Response::success('AI Models retrieved successfully.', [
+            'models' => ModelResource::collection($model->items()),
+            'pagination' => [
+                'current_page' => $model->currentPage(),
+                'per_page' => $model->perPage(),
+                'total' => $model->total(),
+                'last_page' => $model->lastPage(),
+                'has_more_pages' => $model->hasMorePages(),
+            ],
+        ]);
     }
 }
