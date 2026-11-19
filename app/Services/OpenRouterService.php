@@ -23,6 +23,7 @@ class OpenRouterService
                 ->post('https://openrouter.ai/api/v1/chat/completions', [
                     'model'    => $model,
                     'messages' => $messages,
+                    'max_tokens' => 2000,
                 ]);
         } catch (ConnectionException $e) {
             report($e);
